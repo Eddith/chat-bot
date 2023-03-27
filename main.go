@@ -1,24 +1,28 @@
 package main
 
 import (
+	"context"
+	"github.com/Andrew-peng/go-dalle2/dalle2"
 	"github.com/bwmarrin/discordgo"
-	"github.com/frankzhao/openai-go"
+	"log"
+	"strings"
 	"time"
 )
 
 func main() {
 	// OpenAI API anahtarınızı ve model kimliğinizi burada ayarlayın
-	apiKey := "OPEN_AI_API_KEY"
-	modelID := "OPEN_AI_MODEL_ID"
+	apiKey := "OPENAI_API_KEY"
+	// modelID := "MODEL_ID"
 
 	// Discord botu oluşturun ve API anahtarınızı kullanarak OpenAI dil modeliyle bağlantı kurun
 	bot, err := discordgo.New("Bot " + "DISCORD_BOT_TOKEN")
 	if err != nil {
 		panic(err)
 	}
-	client := openai.New(apiKey)
+	// clientChat := openai.New(apiKey)
+	client, err := dalle2.MakeNewClientV1(apiKey)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Error initializing client: %s", err)
 	}
 
 	// Botun yanıt vereceği mesajları belirleyin
@@ -28,15 +32,36 @@ func main() {
 		}
 
 		// Gelen mesajı OpenAI API'sine gönderin ve yanıtı alın
-		response, err := client.CompleteText(m.Content, modelID, 0, 1000)
+		// responseChat, err := clientChat.CompleteText(m.Content, modelID, 0, 1000)
 
-		if err != nil {
-			panic(err)
+		if strings.Contains(m.Content, "DISCORD_BOT_PREFIX") {
+			response, err := client.Create(
+				context.Background(),
+				m.Content,
+				dalle2.WithNumImages(1),
+				dalle2.WithSize(dalle2.LARGE),
+				dalle2.WithFormat(dalle2.URL),
+			)
+
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			var imgURL string
+
+			for _, img := range response.Data {
+				imgURL = img.Url
+			}
+
+			// Botun yanıtını kanala gönderin
+			s.ChannelMessageSend(m.ChannelID, imgURL)
+			s.ChannelMessage(m.ChannelID, imgURL)
+
+			// Botun yanıtını kanala gönderin
+			// s.ChannelMessageSend(m.ChannelID, responseChat.Choices[0].Text)
+			// s.ChannelMessage(m.ChannelID, responseChat.Choices[0].Text)
 		}
 
-		// Botun yanıtını kanala gönderin
-		s.ChannelMessageSend(m.ChannelID, response.Choices[0].Text)
-		s.ChannelMessage(m.ChannelID, response.Choices[0].Text)
 	})
 
 	// Botu çalıştırın
@@ -48,6 +73,6 @@ func main() {
 	defer close(stop)
 	go bot.Open()
 	for {
-		time.Sleep(time.Second)
+		time.Sleep(time.Minute)
 	}
 }
